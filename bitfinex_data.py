@@ -26,6 +26,7 @@ COVERED_TOKENS = [
     'XLM',
     'XMR',
     'XVG',
+    'USDC', 'USDT',
     ]
 
 def load_one_token(token):

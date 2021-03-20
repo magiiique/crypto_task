@@ -118,7 +118,6 @@ def get_query_result(query, url=None, variables=None):
     data = {'query': query}
     if variables is not None:
         data['variables'] = variables
-    # response = requests.post(
     response = _SESSION.post(
         url,
         data=json.dumps(data),
@@ -281,32 +280,6 @@ def trades_to_positions(trades):
         index = timestamps,
         columns = unique_ccys,
         )
-
-OFFLINE_TOKENS = {
-    "BTC",
-    "ETH",
-    "LTC",
-    "AID",
-    "BAT",
-    "LTC",
-    "DAI",
-    "DASH",
-    "EDO",
-    "EOS",
-    "ETC",
-    "ETP",
-    "NEO",
-    "OMG",
-    "QTUM",
-    "REP",
-    "TRX",
-    "XLM",
-    "XMR",
-    "XVG",
-    # just to make my life easier
-    "USDT",
-    "USDC",
-    }
 
 
 if __name__ == '__main__':
