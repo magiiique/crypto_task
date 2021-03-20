@@ -282,6 +282,32 @@ def trades_to_positions(trades):
         columns = unique_ccys,
         )
 
+OFFLINE_TOKENS = {
+    "BTC",
+    "ETH",
+    "LTC",
+    "AID",
+    "BAT",
+    "LTC",
+    "DAI",
+    "DASH",
+    "EDO",
+    "EOS",
+    "ETC",
+    "ETP",
+    "NEO",
+    "OMG",
+    "QTUM",
+    "REP",
+    "TRX",
+    "XLM",
+    "XMR",
+    "XVG",
+    # just to make my life easier
+    "USDT",
+    "USDC",
+    }
+
 
 if __name__ == '__main__':
     main()
