@@ -256,16 +256,22 @@ def trades_to_positions(trades):
     values = []
 
     for trade in trades:
-        timestamps.append(trade.timestamp)
+        # add a fix for repeated timestamps. Go for something simple, e.g.
+        # add a second if timesteps are repeated
+        if len(timestamps) == 0 or timestamps[-1] < trade.timestamp:
+            timestamps.append(trade.timestamp)
+        else:
+            timestamps.append(timestamps[-1] + datetime.timedelta(seconds=1))
+
         # go through the trades
         new_positions = positions.copy()
         # again, not documented, I'm guessing 'amount in' is amount going into
         # the exchange, i.e. out of the wallet, and vice versa
         for token, amount in [
-                (trade.token0, -trade.amount0In),
-                (trade.token0, +trade.amount0Out),
-                (trade.token1, -trade.amount1In),
-                (trade.token1, +trade.amount1Out),
+                (trade.token0, +trade.amount0In),
+                (trade.token0, -trade.amount0Out),
+                (trade.token1, +trade.amount1In),
+                (trade.token1, -trade.amount1Out),
                 ]:
             new_positions[token] = new_positions[token] + amount
         values.append(

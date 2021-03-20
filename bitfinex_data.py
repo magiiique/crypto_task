@@ -11,7 +11,6 @@ COVERED_TOKENS = [
     'LTC',
     'AID',
     'BAT',
-    'LTC',
     'DAI',
     'DASH',
     'EDO',
@@ -45,7 +44,11 @@ def load_one_token(token):
         # return pd.DataFrame(index=pd.DatetimeIndex([]))
         return pd.Series()
     full_frame = pd.read_csv(path, index_col='date', skiprows=1, parse_dates=True)
-    return full_frame['close']
+    close_price = full_frame['close']
+    # looks like AID, REP have some innocuous duplicate index values, drop them
+    # for now
+    close_price_dropped = close_price[~close_price.index.duplicated(keep='last')]
+    return close_price_dropped
 
 
 def load_token_prices(tokens):
