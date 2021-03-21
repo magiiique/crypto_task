@@ -27,28 +27,6 @@ USERS_QUERY="""
 }}
 """
 
-SWAPS_QUERY="""
-{{
-  swaps(where: {{to: "{user_id}"}}, orderBy: timestamp, first: 1000)
-    {{
-      timestamp
-
-      pair {{
-        token0 {{symbol}}
-        token1 {{symbol}}
-      }}
-
-      amount0In
-      amount1In
-      amount0Out
-      amount1Out
-      to
-      sender
-      amountUSD
-    }}
-}}
-"""
-
 SWAPS_QUERY_V2="""
 {{
   swaps(where: {{to: "{user_id}", timestamp_gt: "{last_timestamp}"}},
@@ -72,21 +50,6 @@ SWAPS_QUERY_V2="""
 }}
 """
 
-SAMPLE_QUERY="""
-{
-  uniswapFactories(first: 5) {
-    id
-    pairCount
-    totalVolumeUSD
-  }
-  tokens(first: 5) {
-    id
-    symbol
-    name
-    decimals
-  }
-}
-"""
 
 # add some basic rate limiting
 def rate_limit(rate_per_sec):
@@ -104,6 +67,7 @@ def rate_limit(rate_per_sec):
             return fn(*args, **kwargs)
         return wrapped
     return inner
+
 
 _SESSION=None
 @rate_limit(0.5)
@@ -155,28 +119,6 @@ RawTransaction = collections.namedtuple(
      'sender'
      ])
 
-def get_user_transactions(user_id):
-    transactions = []
-    query = SWAPS_QUERY.format(user_id=user_id)
-    result = json.loads(get_query_result(query))
-    if 'errors' in result:
-        pass
-    else:
-        for swap in result['data']['swaps']:
-            transactions.append( RawTransaction(
-                timestamp = datetime.datetime.fromtimestamp(int(swap['timestamp'])),
-                token0 = swap['pair']['token0']['symbol'],
-                token1 = swap['pair']['token1']['symbol'],
-                amount0In = float(swap['amount0In']),
-                amount1In = float(swap['amount1In']),
-                amount0Out = float(swap['amount0Out']),
-                amount1Out = float(swap['amount1Out']),
-                amountUSD = float(swap['amountUSD']),
-                to = swap['to'],
-                sender = swap['sender'],
-                ) )
-    return transactions
-
 
 def get_user_transactions_v2(user_id):
     last_timestamp=0
@@ -210,12 +152,10 @@ def get_user_transactions_v2(user_id):
 
 
 def main():
-    # print( get_query_result(SAMPLE_QUERY) )
     wallets = list(itertools.islice(
         get_wallets(), 0, 10))
 
     all_transactions = [
-        # get_user_transactions(wallet)
         get_user_transactions_v2(wallet)
         for wallet in wallets]
 
@@ -241,7 +181,8 @@ def trades_to_positions(trades):
     Returns a pandas df with snapshots of position held. Assumption is that
     portfolio is initially empty; even though in practice it must be seeded with
     some crypto for exchanges to happen. But this is good enough for assessing
-    performance.
+    performance - we don't want to count the performance of the initial position
+    anyway.
     """
     # get unique currencies
     unique_ccys_set = reduce(

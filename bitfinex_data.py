@@ -1,5 +1,5 @@
 """
-Some wrappers for working with the Bitfinex data
+Functions for loading the Bitfinex data from csv
 """
 
 import pandas as pd

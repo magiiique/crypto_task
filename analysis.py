@@ -6,6 +6,7 @@ import glob
 import pickle
 import functools
 import datetime
+import collections
 
 import numpy as np
 
@@ -126,6 +127,7 @@ def get_wallet_performance_stats(trades, token_prices):
     return dict(
         PV = present_value,
         PV_per_asset = present_value_per_asset,
+        positions = trades_frame_reindexed,
         pnl = pnl,
         ret = ret,
         GMV = gmv,
@@ -175,8 +177,19 @@ def rank_hit_rate(performance_stats, token_prices):
     on individual legs, calculate hit rate. Exclude USDC, USDT, DAI, since they
     have approx constant prices.
     """
-    # FIXME
-    return 0.0
+    # exclude stablecoins
+    pos = performance_stats['positions']
+    tokens = pos.columns
+
+    tokens = [tt for tt in tokens if tt not in ['USDC', 'USDT', 'DAI']]
+    pos_no_stable = pos.loc[:, tokens]
+
+    fifo_results = get_fifo_trades(
+        pos_no_stable, token_prices,
+        datetime.datetime(2021, 3, 16))
+    trade_rets = np.array([ x[3] for x in fifo_results ])
+    return (trade_rets > 0).mean()
+
 
 def rank_monthly_return(performance_stats, token_prices):
     """Nice and easy, average monthly return on GMV"""
@@ -238,4 +251,87 @@ def datetime_to_fractional_year(datetime_):
     return datetime_.year + difference_days / 365.25
 
 
-#def plot_wallet_
+class FifoTradeQueue:
+    """Maintaing a queue of orders for FIFO decomposition"""
+    def __init__(self, max_size=10000):
+        self.queue = collections.deque(maxlen=max_size)
+
+    def push(self, timestamp, trade):
+        """
+        Add new trade; if can emit some closed trades out of that, then do so.
+        """
+        # if queue empty, just pop it back
+        if len(self.queue) == 0:
+            self.queue.append([timestamp, trade])
+            return []
+        else:
+            emitted_trades = []
+            # while the leftmost trade and the new one being added
+            # point in opposite direction
+            remaining_trade = trade
+            while ((len(self.queue) > 0)
+                   and (self.queue[0][1] * trade < 0)
+                   and (not np.isclose(remaining_trade, 0.0))):
+                # if remaining_trade is less than the leftmost trade, take that
+                # and reduce leftmost trade, set remaining_trade to 0
+                leftmost_timestamp, leftmost_trade = self.queue[0]
+                if np.abs(leftmost_trade) > np.abs(trade):
+                    emitted_trades.append((
+                        -remaining_trade, # - because this is the closeout
+                        leftmost_timestamp,
+                        timestamp))
+                    self.queue[0][1] += remaining_trade
+                    remaining_trade = 0.0
+                else:
+                    # else pop the leftmost trade, subtract from remaining_trade
+                    # and continue
+                   emitted_trades.append((
+                       leftmost_trade,
+                       leftmost_timestamp,
+                       timestamp))
+                   self.queue.popleft()
+                   remaining_trade += leftmost_trade
+            # if there is anything remaning in remaining_trade, pop it on the
+            # right side of the queue
+            if not np.isclose(remaining_trade, 0.0):
+                self.queue.append([timestamp, remaining_trade])
+
+            return emitted_trades
+
+def get_fifo_trades(positions, prices, final_unwind_timestamp=None):
+    """
+    For each position sequence, return a tuple (token, t1, t2, return)
+    """
+
+    # helper for below
+    def get_price(token, timestamp):
+        # return prices.reindex(index=[timestamp], columns=[token],
+        #                       method='ffill').values[0,0]
+        return prices[token].reindex(index=[timestamp], method='ffill').values[0]
+
+    result = []
+    for token in positions.columns:
+        token_pos = positions.loc[:, token]
+        if final_unwind_timestamp is not None:
+            token_pos = token_pos.copy()
+            token_pos[final_unwind_timestamp] = 0.0
+
+        token_trades = token_pos.dropna().diff().dropna()
+        token_trades = token_trades[token_trades != 0]
+
+        timestamps = token_trades.index
+        trades = token_trades.values
+
+        queue = FifoTradeQueue()
+
+        for timestamp, trade in zip(timestamps, trades):
+            popped_trades = queue.push(timestamp, trade)
+            for amount, t1, t2 in popped_trades:
+                # get token ret
+                # p1, p2 = prices.loc[t1, token], prices.loc[t2, token]
+                p1 = get_price(token, t1)
+                p2 = get_price(token, t2)
+                token_ret = p2 / p1 - 1.0
+                result.append((token, t1, t2, token_ret))
+
+        return result
